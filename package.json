@@ -1,0 +1,21 @@
+{
+  "name": "tenant-dns-cutover",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/tenant_hostname_admin.ts",
+    "test": "node --experimental-strip-types --test test/cutover_policy.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
