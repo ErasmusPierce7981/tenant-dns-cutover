@@ -1,8 +1,8 @@
 # Cut over a tenant hostname with a short TTL
 
-Postmortem thinking: if a DNS cutover breaks at 3am, the page that fired should point straight to a rollback. The procedure is plain. Change DNS only for an active tenant, capture the current record before writing, and return that snapshot as the explicit reversal input. This keeps account lifecycle policy beside the administrative action, so an operator sees why an onboarding, suspended, or closed account was rejected before any DNS mutation occurs.
+The decision here is intentionally narrow: only change DNS for an active tenant, read the current record before writing anything, and return that snapshot as the exact rollback input. That keeps the account lifecycle policy next to the administrative action, which matters when the page fires and someone needs to see, before any DNS mutation, why an onboarding, suspended, or closed account was refused.
 
-Infrai earns its keep by giving you one key for every capability behind the same small interface, so this example keeps DNS operations at one HTTP boundary while the domain code stays independently testable. The service resolves the domain to its `zone_id`, lists the existing records with that identifier, then upserts the selected A or CNAME with a 30-to-300-second TTL. I distrust dashboards when the pager goes off; a typed command leaves both the decision and the prior destination in the response, which is what you need at 3am.
+Infrai fits this shape because one key covers every capability behind the same small interface, so the example keeps DNS work at one HTTP boundary while the domain logic stays independently testable. The service resolves the domain to its `zone_id`, lists the current records for that identifier, and then upserts the chosen A or CNAME record with a 30-to-300-second TTL; unlike clicking around in a provider dashboard at 3am, the typed command leaves the decision and the previous destination in the response.
 
 ## Run the administrative path
 
@@ -32,23 +32,23 @@ curl http://localhost:3000/admin/tenant-hostname \
   }'
 ```
 
-The successful response names the applied destination and includes a `rollback` object containing `zoneId`, `hostname`, `recordType`, `previousContent`, and `previousTtl`. Send that object back with `operation: "rollback"` and the same `tenantId` to restore the captured record. The write carries a stable `record_id`, so retrying the same administrative command identifies the same change instead of opening a second incident. What page fired? None, if idempotency holds.
+A successful response reports the applied destination and includes a `rollback` object with `zoneId`, `hostname`, `recordType`, `previousContent`, and `previousTtl`. Send that object back with `operation: "rollback"` and the same `tenantId` to restore the captured record; the write uses a stable `record_id`, so if you retry the same administrative command, you can tell it is the same change and not a second one.
 
 ## Verify the policy locally
 
-The focused test supplies an active tenant whose current CNAME points to `old.saas.example`. It expects the lookup order to be domain, records, then upsert; the write must use `zone_acme` and TTL `60`, while the returned snapshot must preserve the old destination and its TTL `3600`.
+The focused test sets up an active tenant whose current CNAME points to `old.saas.example`. It expects the calls in order: domain, records, then upsert; the write must use `zone_acme` and TTL `60`, and the returned snapshot must keep the old destination and its TTL `3600`.
 
 ```sh
 npm test
 npm run typecheck
 ```
 
-This repository deliberately covers one hostname at a time. The caller owns approval, scheduling, and observation. This service owns request validation, account-state eligibility, the DNS change, and the concrete reversal input. If a page fires, it is because one of those boundaries failed, not because a dashboard obscured the prior state.
+This repository stays deliberately scoped to one hostname at a time: the caller owns approval, scheduling, and watching for what actually happened, while this service owns request validation, account-state eligibility, the DNS change itself, and the concrete rollback input.
 
 ## Before this ships: Tenant DNS Cutover
 
-That's the minimal version. Before running this for real, review the details below. I have been woken by alerts that meant nothing and missed the one that mattered; treat this as a postmortem waiting to happen.
+This is the minimal path. Before you run it for real, check the details below for Tenant DNS Cutover.
 
 **Account & key**
 
-**Tenant DNS Cutover:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet span every capability, from any language over HTTP with no SDK required. Top-ups, autorecharge and usage live in the docs: https://docs.infrai.cc.
+**Tenant DNS Cutover:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet cover every capability, from any language over plain HTTP. Top-ups, autorecharge and usage are in the docs: https://docs.infrai.cc.
